@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Groq from 'groq-sdk';
+import { search } from 'duck-duck-scrape';
 
 dotenv.config();
 
@@ -41,12 +42,25 @@ function guardarChats(chats) {
 
 const SYSTEM_INSTRUCTION = {
   role: 'system',
-  content: 'Eres IAvel, un asistente virtual atento y amigable. Responde siempre con un formato visual claro, limpio y conciso. Evita volcar tablas masivas de texto a menos que el usuario lo solicite expresamente; en su lugar, utiliza viñetas cortas, saltos de línea legibles y párrafos breves.'
+  content: 'Eres IAvel, un asistente virtual atento, amigable e inteligente. Cuando recibas datos de búsqueda web en tiempo real, utilízalos para dar respuestas precisas y actualizadas al día de hoy. Responde de forma clara y bien estructurada.'
 };
 
-// --- RUTAS API CON AISLAMIENTO DE USUARIO ---
+// Función para realizar búsquedas en internet
+async function buscarEnWeb(query) {
+  try {
+    const searchResults = await search(query, { safeSearch: 0 });
+    if (searchResults && searchResults.results.length > 0) {
+      const topResults = searchResults.results.slice(0, 3);
+      return topResults.map(r => `- ${r.title}: ${r.snippet} (Fuente: ${r.url})`).join('\n');
+    }
+  } catch (error) {
+    console.error("Error al buscar en la web:", error);
+  }
+  return null;
+}
 
-// 1. Obtener únicamente los chats pertenecientes a este userId
+// --- RUTAS API ---
+
 app.get('/api/chats', (req, res) => {
   const userId = req.query.userId;
   if (!userId) return res.json([]);
@@ -63,7 +77,6 @@ app.get('/api/chats', (req, res) => {
   res.json(lista);
 });
 
-// 2. Crear un nuevo chat asignado al userId del cliente
 app.post('/api/chats/nuevo', (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'Falta identificador de usuario (userId).' });
@@ -80,21 +93,19 @@ app.post('/api/chats/nuevo', (req, res) => {
   res.json({ id, titulo: chats[id].titulo });
 });
 
-// 3. Obtener conversación si pertenece al userId
 app.get('/api/chats/:id', (req, res) => {
   const userId = req.query.userId;
   const chats = leerChats();
   const chat = chats[req.params.id];
   
   if (!chat || chat.userId !== userId) {
-    return res.status(404).json({ error: 'Chat no encontrado o no autorizado.' });
+    return res.status(404).json({ error: 'Chat no encontrado.' });
   }
   
   const mensajesVisibles = chat.mensajes.filter(m => m.role !== 'system');
   res.json({ titulo: chat.titulo, mensajes: mensajesVisibles });
 });
 
-// 4. Eliminar chat si pertenece al userId
 app.delete('/api/chats/:id', (req, res) => {
   const userId = req.query.userId;
   const chats = leerChats();
@@ -108,16 +119,15 @@ app.delete('/api/chats/:id', (req, res) => {
   res.status(404).json({ error: 'Chat no encontrado.' });
 });
 
-// 5. Enviar mensaje a Groq
 app.post('/api/chat', async (req, res) => {
   const { chatId, userId, message } = req.body;
 
   if (!message || !chatId || !userId) {
-    return res.status(400).json({ error: "Faltan parámetros de mensaje o usuario." });
+    return res.status(400).json({ error: "Faltan datos requeridos." });
   }
 
   if (!process.env.GROQ_API_KEY) {
-    return res.status(500).json({ error: "Falta configurar GROQ_API_KEY en las variables de entorno de Render." });
+    return res.status(500).json({ error: "Falta configurar GROQ_API_KEY en Render." });
   }
 
   const chats = leerChats();
@@ -131,9 +141,17 @@ app.post('/api/chat', async (req, res) => {
       chats[chatId].titulo = message.slice(0, 25) + (message.length > 25 ? '...' : '');
     }
 
-    chats[chatId].mensajes.push({ role: 'user', content: message });
+    // Busca en la web los datos más recientes
+    const resultadosWeb = await buscarEnWeb(message);
+    
+    let mensajeProcesado = message;
+    if (resultadosWeb) {
+      mensajeProcesado = `[Información de búsqueda en tiempo real de internet]:\n${resultadosWeb}\n\nPregunta del usuario: ${message}`;
+    }
 
-    // Petición a Groq con el modelo activo en producción
+    chats[chatId].mensajes.push({ role: 'user', content: mensajeProcesado });
+
+    // Petición a Groq con el modelo openai/gpt-oss-20b
     const completion = await groq.chat.completions.create({
       messages: chats[chatId].mensajes,
       model: 'openai/gpt-oss-20b',
@@ -141,12 +159,14 @@ app.post('/api/chat', async (req, res) => {
 
     const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
 
+    // Guarda el mensaje limpio en el historial sin los datos crudos de búsqueda
+    chats[chatId].mensajes[chats[chatId].mensajes.length - 1].content = message;
     chats[chatId].mensajes.push({ role: 'assistant', content: respuestaIA });
     guardarChats(chats);
 
     res.json({ reply: respuestaIA, titulo: chats[chatId].titulo });
   } catch (error) {
-    console.error("❌ Error en Groq:", error);
+    console.error("❌ Error en backend:", error);
     res.status(500).json({ error: error.message || "Error al procesar el mensaje." });
   }
 });
