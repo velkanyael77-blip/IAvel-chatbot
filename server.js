@@ -123,9 +123,9 @@ app.post('/api/chat', async (req, res) => {
     chats[chatId].mensajes.push({ role: 'user', content: message });
 
     const completion = await groq.chat.completions.create({
-      messages: chats[chatId].mensajes,
-      model: 'llama-3.3-70b-versatile',
-    });
+  messages: chats[chatId].mensajes,
+  model: 'llama-3.3-70b-versatile',
+});
 
     const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
 

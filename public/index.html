@@ -6,11 +6,10 @@
   <title>IAvel Chatbot</title>
   <style>
     :root {
-      /* Tema Verde */
       --bg-dark: #0a110e;
       --bg-sidebar: #111e19;
       --bg-chat: #182822;
-      --accent: #10b981; /* Verde esmeralda principal */
+      --accent: #10b981;
       --accent-hover: #059669;
       --text-main: #e6f4f1;
       --text-muted: #80a89d;
@@ -42,7 +41,6 @@
       position: relative;
     }
 
-    /* Encabezado Superior (Mobile) con Botón Hamburguesa */
     .top-header {
       display: none;
       align-items: center;
@@ -69,7 +67,6 @@
       font-size: 1.1rem;
     }
 
-    /* Sidebar / Barra Lateral */
     .sidebar {
       width: 260px;
       background-color: var(--bg-sidebar);
@@ -145,7 +142,6 @@
       background: rgba(248, 113, 113, 0.2);
     }
 
-    /* Contenido Principal / Área de Chat */
     .main-content {
       flex: 1;
       display: flex;
@@ -188,7 +184,22 @@
       border-bottom-left-radius: 2px;
     }
 
-    /* Formulario de Entrada */
+    .message.system-error {
+      align-self: center;
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+      font-size: 0.85rem;
+    }
+
+    .message.loading {
+      align-self: flex-start;
+      background: var(--bg-chat);
+      color: var(--text-muted);
+      font-style: italic;
+      border: 1px dashed var(--border-color);
+    }
+
     .chat-input-area {
       display: flex;
       padding: 15px;
@@ -229,7 +240,6 @@
       background: var(--accent-hover);
     }
 
-    /* Fondo Oscuro al abrir menú en Celular (Overlay) */
     .sidebar-overlay {
       display: none;
       position: absolute;
@@ -241,7 +251,6 @@
       z-index: 15;
     }
 
-    /* Adaptatividad para Pantallas Pequeñas (Móviles / Tablets) */
     @media (max-width: 768px) {
       #app {
         flex-direction: column;
@@ -271,18 +280,14 @@
 </head>
 <body>
   <div id="app">
-    <!-- Overlay para cerrar menú en móvil -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMenu()"></div>
 
-    <!-- Barra Lateral -->
     <div class="sidebar" id="sidebar">
       <button class="btn-nuevo" onclick="crearNuevoChat()">+ Nuevo Chat</button>
       <div class="chat-list" id="chatList"></div>
     </div>
     
-    <!-- Área Principal -->
     <div class="main-content">
-      <!-- Encabezado con Botón Hamburguesa en Celulares -->
       <div class="top-header">
         <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
         <span class="top-title">IAvel</span>
@@ -298,7 +303,7 @@
           placeholder="Escribe un mensaje..." 
           autocomplete="off"
         >
-        <button type="submit">Enviar</button>
+        <button type="submit" id="sendBtn">Enviar</button>
       </form>
     </div>
   </div>
@@ -325,58 +330,75 @@
     }
 
     async function cargarChats() {
-      const res = await fetch(`/api/chats?userId=${USER_ID}`);
-      const chats = await res.json();
-      const listContainer = document.getElementById('chatList');
-      listContainer.innerHTML = '';
+      try {
+        const res = await fetch(`/api/chats?userId=${USER_ID}`);
+        const chats = await res.json();
+        const listContainer = document.getElementById('chatList');
+        listContainer.innerHTML = '';
 
-      chats.forEach(chat => {
-        const div = document.createElement('div');
-        div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-        div.onclick = () => {
-          seleccionarChat(chat.id);
-          if (window.innerWidth <= 768) toggleMenu(); // Cerrar menú al seleccionar en móvil
-        };
-        div.innerHTML = `
-          <span class="chat-title">${chat.titulo}</span>
-          <button class="btn-delete" onclick="eliminarChat(event, '${chat.id}')">✕</button>
-        `;
-        listContainer.appendChild(div);
-      });
+        chats.forEach(chat => {
+          const div = document.createElement('div');
+          div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+          div.onclick = () => {
+            seleccionarChat(chat.id);
+            if (window.innerWidth <= 768) toggleMenu();
+          };
+          div.innerHTML = `
+            <span class="chat-title">${chat.titulo}</span>
+            <button class="btn-delete" onclick="eliminarChat(event, '${chat.id}')">✕</button>
+          `;
+          listContainer.appendChild(div);
+        });
 
-      if (!currentChatId && chats.length > 0) {
-        seleccionarChat(chats[0].id);
-      } else if (chats.length === 0) {
-        crearNuevoChat();
+        if (!currentChatId && chats.length > 0) {
+          seleccionarChat(chats[0].id);
+        } else if (chats.length === 0) {
+          crearNuevoChat();
+        }
+      } catch (err) {
+        console.error("Error al cargar chats:", err);
       }
     }
 
     async function crearNuevoChat() {
-      const res = await fetch('/api/chats/nuevo', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID })
-      });
-      const chat = await res.json();
-      currentChatId = chat.id;
-      await cargarChats();
-      seleccionarChat(chat.id);
+      try {
+        const res = await fetch('/api/chats/nuevo', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: USER_ID })
+        });
+        const chat = await res.json();
+        currentChatId = chat.id;
+        await cargarChats();
+        seleccionarChat(chat.id);
+      } catch (err) {
+        console.error("Error al crear chat:", err);
+      }
     }
 
     async function seleccionarChat(id) {
       currentChatId = id;
-      const res = await fetch(`/api/chats/${id}?userId=${USER_ID}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      
-      const container = document.getElementById('chatMessages');
-      container.innerHTML = '';
-      
-      data.mensajes.forEach(msg => {
-        agregarMensajePantalla(msg.role, msg.content);
-      });
+      try {
+        const res = await fetch(`/api/chats/${id}?userId=${USER_ID}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const container = document.getElementById('chatMessages');
+        container.innerHTML = '';
+        
+        // Si no hay mensajes previos en el chat, mostrar mensaje de bienvenida
+        if (!data.mensajes || data.mensajes.length === 0) {
+          agregarMensajePantalla('assistant', '¡Hola! Soy IAvel. ¿En qué te puedo ayudar hoy?');
+        } else {
+          data.mensajes.forEach(msg => {
+            agregarMensajePantalla(msg.role, msg.content);
+          });
+        }
 
-      cargarChats();
+        cargarChats();
+      } catch (err) {
+        console.error("Error al seleccionar chat:", err);
+      }
     }
 
     async function eliminarChat(e, id) {
@@ -393,16 +415,24 @@
       div.textContent = content;
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
+      return div;
     }
 
     async function handleSend(e) {
       e.preventDefault();
       const input = document.getElementById('userInput');
+      const sendBtn = document.getElementById('sendBtn');
       const message = input.value.trim();
       if (!message || !currentChatId) return;
 
       input.value = '';
+      sendBtn.disabled = true;
+
+      // Mostrar mensaje del usuario
       agregarMensajePantalla('user', message);
+
+      // Mostrar indicador de "Escribiendo..."
+      const loadingMsg = agregarMensajePantalla('loading', 'IAvel está escribiendo...');
 
       try {
         const res = await fetch('/api/chat', {
@@ -410,14 +440,24 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chatId: currentChatId, userId: USER_ID, message })
         });
+
         const data = await res.json();
         
-        if (data.reply) {
+        // Eliminar indicador de carga
+        loadingMsg.remove();
+
+        if (res.ok && data.reply) {
           agregarMensajePantalla('assistant', data.reply);
           cargarChats();
+        } else {
+          agregarMensajePantalla('system-error', `⚠️ Error: ${data.error || 'No se pudo obtener respuesta.'}`);
         }
       } catch (err) {
+        loadingMsg.remove();
+        agregarMensajePantalla('system-error', '⚠️ Error de conexión con el servidor.');
         console.error(err);
+      } finally {
+        sendBtn.disabled = false;
       }
     }
 
