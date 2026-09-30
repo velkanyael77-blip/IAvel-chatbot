@@ -41,7 +41,7 @@ function guardarChats(chats) {
 
 const SYSTEM_INSTRUCTION = {
   role: 'system',
-  content: 'Eres IAvel, un asistente virtual útil, atento, amigable y muy inteligente.'
+  content: 'Eres IAvel, un asistente virtual atento y amigable. Responde siempre con un formato visual claro, limpio y conciso. Evita volcar tablas masivas de texto a menos que el usuario lo solicite expresamente; en su lugar, utiliza viñetas cortas, saltos de línea legibles y párrafos breves.'
 };
 
 // --- RUTAS API CON AISLAMIENTO DE USUARIO ---

@@ -276,6 +276,41 @@
         display: block;
       }
     }
+
+/* Estilos para listas y tablas renderizadas por la IA */
+.message table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  display: block;
+}
+
+.message th, .message td {
+  border: 1px solid var(--border-color);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.message th {
+  background-color: var(--bg-sidebar);
+  color: var(--accent);
+}
+
+.message ul, .message ol {
+  margin-left: 20px;
+  padding-left: 5px;
+}
+
+.message blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  color: var(--text-muted);
+  margin: 8px 0;
+  font-style: italic;
+}
+
   </style>
 </head>
 <body>
@@ -408,55 +443,25 @@
       cargarChats();
     }
 
-    function agregarMensajePantalla(role, content) {
-      const container = document.getElementById('chatMessages');
-      const div = document.createElement('div');
-      div.className = `message ${role}`;
-      div.textContent = content;
-      container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
-      return div;
-    }
-
-    async function handleSend(e) {
-      e.preventDefault();
-      const input = document.getElementById('userInput');
-      const sendBtn = document.getElementById('sendBtn');
-      const message = input.value.trim();
-      if (!message || !currentChatId) return;
-
-      input.value = '';
-      sendBtn.disabled = true;
-
-      agregarMensajePantalla('user', message);
-      const loadingMsg = agregarMensajePantalla('loading', 'IAvel está escribiendo...');
-
-      try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatId: currentChatId, userId: USER_ID, message })
-        });
-
-        const data = await res.json();
-        loadingMsg.remove();
-
-        if (res.ok && data.reply) {
-          agregarMensajePantalla('assistant', data.reply);
-          cargarChats();
-        } else {
-          agregarMensajePantalla('system-error', `⚠️ ${data.error || 'No se pudo obtener respuesta.'}`);
-        }
-      } catch (err) {
-        loadingMsg.remove();
-        agregarMensajePantalla('system-error', '⚠️ Error de conexión con el servidor.');
-        console.error(err);
-      } finally {
-        sendBtn.disabled = false;
-      }
-    }
+   function agregarMensajePantalla(role, content) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  
+  // Si existe la librería marked y es mensaje de la IA/sistema, se formatea como HTML limpio
+  if (window.marked && (role === 'assistant' || role === 'system-error')) {
+    div.innerHTML = marked.parse(content);
+  } else {
+    div.textContent = content;
+  }
+  
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
 
     cargarChats();
   </script>
 </body>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </html>
