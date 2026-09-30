@@ -331,22 +331,22 @@
 
       <div class="chat-messages" id="chatMessages"></div>
       
-      <form class="chat-input-area" onsubmit="handleSend(event)">
-        <input 
-          type="text" 
-          id="userInput" 
-          placeholder="Escribe un mensaje..." 
-          autocomplete="off"
-        >
-        <button type="submit" id="sendBtn">Enviar</button>
-      </form>
+      <form class="chat-input-area" id="chatForm" onsubmit="handleSend(event)">
+  <input 
+    type="text" 
+    id="userInput" 
+    placeholder="Escribe un mensaje..." 
+    autocomplete="off"
+    required
+  >
+  <button type="submit" id="sendBtn">Enviar</button>
+</form>
     </div>
   </div>
 
   <script>
     let currentChatId = null;
 
-    // Generador o recuperador de identificador único por dispositivo
     function getUserId() {
       let userId = localStorage.getItem('iavel_user_id');
       if (!userId) {
@@ -443,22 +443,64 @@
       cargarChats();
     }
 
-   function agregarMensajePantalla(role, content) {
-  const container = document.getElementById('chatMessages');
-  const div = document.createElement('div');
-  div.className = `message ${role}`;
-  
-  // Si existe la librería marked y es mensaje de la IA/sistema, se formatea como HTML limpio
-  if (window.marked && (role === 'assistant' || role === 'system-error')) {
-    div.innerHTML = marked.parse(content);
-  } else {
-    div.textContent = content;
-  }
-  
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-  return div;
-}
+    function agregarMensajePantalla(role, content) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      
+      // Procesa el Markdown si es un mensaje de la IA
+      if (window.marked && (role === 'assistant' || role === 'system-error')) {
+        div.innerHTML = marked.parse(content);
+      } else {
+        div.textContent = content;
+      }
+
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+      return div;
+    }
+
+    async function handleSend(e) {
+      if (e) e.preventDefault();
+
+      const input = document.getElementById('userInput');
+      const sendBtn = document.getElementById('sendBtn');
+      const message = input.value.trim();
+
+      if (!message || !currentChatId) return false;
+
+      input.value = '';
+      if (sendBtn) sendBtn.disabled = true;
+
+      agregarMensajePantalla('user', message);
+      const loadingMsg = agregarMensajePantalla('loading', 'IAvel está escribiendo...');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: currentChatId, userId: USER_ID, message })
+        });
+
+        const data = await res.json();
+        loadingMsg.remove();
+
+        if (res.ok && data.reply) {
+          agregarMensajePantalla('assistant', data.reply);
+          cargarChats();
+        } else {
+          agregarMensajePantalla('system-error', `⚠️ ${data.error || 'No se pudo obtener respuesta.'}`);
+        }
+      } catch (err) {
+        loadingMsg.remove();
+        agregarMensajePantalla('system-error', '⚠️ Error de conexión con el servidor.');
+        console.error(err);
+      } finally {
+        if (sendBtn) sendBtn.disabled = false;
+      }
+
+      return false;
+    }
 
     cargarChats();
   </script>
