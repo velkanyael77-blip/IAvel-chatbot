@@ -42,19 +42,30 @@ function guardarChats(chats) {
 
 const SYSTEM_INSTRUCTION = {
   role: 'system',
-  content: 'Eres IAvel, un asistente virtual atento, amigable e inteligente. Cuando recibas datos de búsqueda web en tiempo real, utilízalos para dar respuestas precisas y actualizadas al día de hoy. Responde de forma clara y bien estructurada.'
+  content: 'Eres IAvel, un asistente virtual atento, amigable e inteligente. Responde siempre de forma clara, concisa y bien estructurada en Markdown.'
 };
 
-// Función para realizar búsquedas en internet
+// Función para verificar si la pregunta requiere información en tiempo real
+function requiereBusquedaWeb(mensaje) {
+  const texto = mensaje.toLowerCase();
+  const palabrasClave = [
+    'hoy', 'noticia', 'noticias', 'reciente', 'actual', 'ahora',
+    'quien gano', 'resultado', 'precio', 'clima', 'tiempo', '2025', '2026',
+    'donde esta', 'quien es el presidente', 'estrenos', 'dolar'
+  ];
+  return palabrasClave.some(p => texto.includes(p));
+}
+
+// Búsqueda ultra-rápida (limitada a 2 resultados clave)
 async function buscarEnWeb(query) {
   try {
     const searchResults = await search(query, { safeSearch: 0 });
     if (searchResults && searchResults.results.length > 0) {
-      const topResults = searchResults.results.slice(0, 3);
-      return topResults.map(r => `- ${r.title}: ${r.snippet} (Fuente: ${r.url})`).join('\n');
+      const topResults = searchResults.results.slice(0, 2);
+      return topResults.map(r => `- ${r.title}: ${r.snippet}`).join('\n');
     }
   } catch (error) {
-    console.error("Error al buscar en la web:", error);
+    console.error("Error en búsqueda web rápida:", error);
   }
   return null;
 }
@@ -66,20 +77,16 @@ app.get('/api/chats', (req, res) => {
   if (!userId) return res.json([]);
 
   const chats = leerChats();
-  
   const lista = Object.keys(chats)
     .filter(id => chats[id].userId === userId)
-    .map(id => ({
-      id,
-      titulo: chats[id].titulo || 'Nuevo Chat'
-    }));
+    .map(id => ({ id, titulo: chats[id].titulo || 'Nuevo Chat' }));
     
   res.json(lista);
 });
 
 app.post('/api/chats/nuevo', (req, res) => {
   const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'Falta identificador de usuario (userId).' });
+  if (!userId) return res.status(400).json({ error: 'Falta userId.' });
 
   const chats = leerChats();
   const id = 'chat_' + Date.now();
@@ -141,17 +148,19 @@ app.post('/api/chat', async (req, res) => {
       chats[chatId].titulo = message.slice(0, 25) + (message.length > 25 ? '...' : '');
     }
 
-    // Busca en la web los datos más recientes
-    const resultadosWeb = await buscarEnWeb(message);
-    
     let mensajeProcesado = message;
-    if (resultadosWeb) {
-      mensajeProcesado = `[Información de búsqueda en tiempo real de internet]:\n${resultadosWeb}\n\nPregunta del usuario: ${message}`;
+
+    // Solo buscar en la web si el mensaje lo necesita
+    if (requiereBusquedaWeb(message)) {
+      const resultadosWeb = await buscarEnWeb(message);
+      if (resultadosWeb) {
+        mensajeProcesado = `[Datos de búsqueda web actualizados]:\n${resultadosWeb}\n\nPregunta: ${message}`;
+      }
     }
 
     chats[chatId].mensajes.push({ role: 'user', content: mensajeProcesado });
 
-    // Petición a Groq con el modelo openai/gpt-oss-20b
+    // Consulta veloz con el modelo openai/gpt-oss-20b
     const completion = await groq.chat.completions.create({
       messages: chats[chatId].mensajes,
       model: 'openai/gpt-oss-20b',
@@ -159,7 +168,7 @@ app.post('/api/chat', async (req, res) => {
 
     const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
 
-    // Guarda el mensaje limpio en el historial sin los datos crudos de búsqueda
+    // Restaurar mensaje limpio para el historial
     chats[chatId].mensajes[chats[chatId].mensajes.length - 1].content = message;
     chats[chatId].mensajes.push({ role: 'assistant', content: respuestaIA });
     guardarChats(chats);
