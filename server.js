@@ -125,10 +125,9 @@ app.post('/api/chat', async (req, res) => {
 
     chats[chatId].mensajes.push({ role: 'user', content: message });
 
-    // Peticion a Groq usando el modelo oficial activo
-    const completion = await groq.chat.completions.create({
+   const completion = await groq.chat.completions.create({
       messages: chats[chatId].mensajes,
-      model: 'llama3-8b-8192',
+      model: 'openai/gpt-oss-20b',
     });
 
     const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
