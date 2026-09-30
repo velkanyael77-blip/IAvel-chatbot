@@ -10,21 +10,19 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. Inicialización de la aplicación de Express y Groq
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Inicialización de Groq con la API Key
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
 
-// Middlewares
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const CHATS_FILE = path.join(__dirname, 'chats.json');
 
-// Funciones auxiliares para leer y guardar JSON
 function leerChats() {
   if (!fs.existsSync(CHATS_FILE)) {
     fs.writeFileSync(CHATS_FILE, JSON.stringify({}), 'utf-8');
@@ -44,16 +42,18 @@ function guardarChats(chats) {
 
 const SYSTEM_INSTRUCTION = {
   role: 'system',
-  content: 'Eres IAvel, un asistente virtual útil, atento y amigable.'
+  content: 'Eres IAvel, un asistente virtual útil, atento, amigable y muy inteligente.'
 };
 
-// 2. Rutas del API
+// --- RUTAS DEL API ---
+
+// 1. Obtener lista de chats del usuario
 app.get('/api/chats', (req, res) => {
-  const { userId } = req.query;
+  const userId = req.query.userId || 'default_user';
   const chats = leerChats();
   
   const lista = Object.keys(chats)
-    .filter(id => chats[id].userId === userId)
+    .filter(id => chats[id].userId === userId || !chats[id].userId)
     .map(id => ({
       id,
       titulo: chats[id].titulo || 'Nuevo Chat'
@@ -62,12 +62,12 @@ app.get('/api/chats', (req, res) => {
   res.json(lista);
 });
 
+// 2. Crear un nuevo chat
 app.post('/api/chats/nuevo', (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'Falta userId' });
-
+  const userId = req.body.userId || 'default_user';
   const chats = leerChats();
   const id = 'chat_' + Date.now();
+
   chats[id] = {
     userId,
     titulo: 'Nuevo Chat',
@@ -77,12 +77,13 @@ app.post('/api/chats/nuevo', (req, res) => {
   res.json({ id, titulo: chats[id].titulo });
 });
 
+// 3. Obtener conversación específica
 app.get('/api/chats/:id', (req, res) => {
-  const { userId } = req.query;
+  const userId = req.query.userId || 'default_user';
   const chats = leerChats();
   const chat = chats[req.params.id];
   
-  if (!chat || chat.userId !== userId) {
+  if (!chat) {
     return res.status(404).json({ error: 'Chat no encontrado' });
   }
   
@@ -90,12 +91,10 @@ app.get('/api/chats/:id', (req, res) => {
   res.json({ titulo: chat.titulo, mensajes: mensajesVisibles });
 });
 
+// 4. Eliminar un chat
 app.delete('/api/chats/:id', (req, res) => {
-  const { userId } = req.query;
   const chats = leerChats();
-  const chat = chats[req.params.id];
-
-  if (chat && chat.userId === userId) {
+  if (chats[req.params.id]) {
     delete chats[req.params.id];
     guardarChats(chats);
     return res.json({ success: true });
@@ -103,43 +102,53 @@ app.delete('/api/chats/:id', (req, res) => {
   res.status(404).json({ error: 'Chat no encontrado' });
 });
 
+// 5. Enviar mensaje a la IA (Groq)
 app.post('/api/chat', async (req, res) => {
   const { chatId, userId, message } = req.body;
 
-  if (!message || !chatId || !userId) {
-    return res.status(400).json({ error: "Faltan parámetros requeridos." });
+  if (!message || !chatId) {
+    return res.status(400).json({ error: "Faltan datos requeridos." });
   }
 
   const chats = leerChats();
-  if (!chats[chatId] || chats[chatId].userId !== userId) {
-    return res.status(404).json({ error: "El chat especificado no existe o no te pertenece." });
+
+  // Si el chat no existe, lo creamos automáticamente
+  if (!chats[chatId]) {
+    chats[chatId] = {
+      userId: userId || 'default_user',
+      titulo: 'Nuevo Chat',
+      mensajes: [SYSTEM_INSTRUCTION]
+    };
   }
 
   try {
+    // Actualizar título con los primeros caracteres del primer mensaje
     if (chats[chatId].titulo === 'Nuevo Chat') {
       chats[chatId].titulo = message.slice(0, 25) + (message.length > 25 ? '...' : '');
     }
 
+    // Agregar mensaje del usuario a la historia
     chats[chatId].mensajes.push({ role: 'user', content: message });
 
+    // MODELO Llama 3.1 8B Instant (El más rápido, estable y libre de errores en Groq)
     const completion = await groq.chat.completions.create({
-  messages: chats[chatId].mensajes,
-  model: 'llama-3.3-70b-versatile',
-});
+      messages: chats[chatId].mensajes,
+      model: 'llama-3.1-8b-instant',
+    });
 
-    const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
+    const respuestaIA = completion.choices[0]?.message?.content || "No pude generar una respuesta.";
 
+    // Guardar respuesta de la IA
     chats[chatId].mensajes.push({ role: 'assistant', content: respuestaIA });
     guardarChats(chats);
 
     res.json({ reply: respuestaIA, titulo: chats[chatId].titulo });
   } catch (error) {
-    console.error("❌ Error en Groq:", error);
-    res.status(500).json({ error: "Ocurrió un error al procesar el mensaje con Groq." });
+    console.error("❌ Error en backend Groq:", error);
+    res.status(500).json({ error: "Error en el servidor de IA. Revisa la consola o tu GROQ_API_KEY." });
   }
 });
 
-// 3. Arrancar servidor
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
+  console.log(`Servidor IAvel ejecutándose en el puerto ${PORT}`);
 });
