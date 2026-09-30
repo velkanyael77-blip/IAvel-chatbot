@@ -42,7 +42,7 @@ function guardarChats(chats) {
 
 const SYSTEM_INSTRUCTION = {
   role: 'system',
-  content: 'Eres IAvel, un asistente virtual atento, amigable e inteligente. Responde siempre de forma clara, concisa y bien estructurada en Markdown.'
+  content: 'Eres IAvel, un asistente virtual basado en inteligencia artificial. Recuerda responder con cortesía, claridad y concisión utilizando formato Markdown cuando corresponda.'
 };
 
 // Función para verificar si la pregunta requiere información en tiempo real
