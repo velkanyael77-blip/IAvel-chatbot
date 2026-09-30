@@ -44,14 +44,17 @@ const SYSTEM_INSTRUCTION = {
   content: 'Eres IAvel, un asistente virtual útil, atento, amigable y muy inteligente.'
 };
 
-// --- RUTAS API ---
+// --- RUTAS API CON AISLAMIENTO DE USUARIO ---
 
+// 1. Obtener únicamente los chats pertenecientes a este userId
 app.get('/api/chats', (req, res) => {
-  const userId = req.query.userId || 'default_user';
+  const userId = req.query.userId;
+  if (!userId) return res.json([]);
+
   const chats = leerChats();
   
   const lista = Object.keys(chats)
-    .filter(id => chats[id].userId === userId || !chats[id].userId)
+    .filter(id => chats[id].userId === userId)
     .map(id => ({
       id,
       titulo: chats[id].titulo || 'Nuevo Chat'
@@ -60,8 +63,11 @@ app.get('/api/chats', (req, res) => {
   res.json(lista);
 });
 
+// 2. Crear un nuevo chat asignado al userId del cliente
 app.post('/api/chats/nuevo', (req, res) => {
-  const userId = req.body.userId || 'default_user';
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'Falta identificador de usuario (userId).' });
+
   const chats = leerChats();
   const id = 'chat_' + Date.now();
 
@@ -74,48 +80,50 @@ app.post('/api/chats/nuevo', (req, res) => {
   res.json({ id, titulo: chats[id].titulo });
 });
 
+// 3. Obtener conversación si pertenece al userId
 app.get('/api/chats/:id', (req, res) => {
-  const userId = req.query.userId || 'default_user';
+  const userId = req.query.userId;
   const chats = leerChats();
   const chat = chats[req.params.id];
   
-  if (!chat) {
-    return res.status(404).json({ error: 'Chat no encontrado' });
+  if (!chat || chat.userId !== userId) {
+    return res.status(404).json({ error: 'Chat no encontrado o no autorizado.' });
   }
   
   const mensajesVisibles = chat.mensajes.filter(m => m.role !== 'system');
   res.json({ titulo: chat.titulo, mensajes: mensajesVisibles });
 });
 
+// 4. Eliminar chat si pertenece al userId
 app.delete('/api/chats/:id', (req, res) => {
+  const userId = req.query.userId;
   const chats = leerChats();
-  if (chats[req.params.id]) {
+  const chat = chats[req.params.id];
+
+  if (chat && chat.userId === userId) {
     delete chats[req.params.id];
     guardarChats(chats);
     return res.json({ success: true });
   }
-  res.status(404).json({ error: 'Chat no encontrado' });
+  res.status(404).json({ error: 'Chat no encontrado.' });
 });
 
+// 5. Enviar mensaje a Groq
 app.post('/api/chat', async (req, res) => {
   const { chatId, userId, message } = req.body;
 
-  if (!message || !chatId) {
-    return res.status(400).json({ error: "Faltan datos requeridos." });
+  if (!message || !chatId || !userId) {
+    return res.status(400).json({ error: "Faltan parámetros de mensaje o usuario." });
   }
 
   if (!process.env.GROQ_API_KEY) {
-    return res.status(500).json({ error: "Falta configurar la GROQ_API_KEY en Render." });
+    return res.status(500).json({ error: "Falta configurar GROQ_API_KEY en las variables de entorno de Render." });
   }
 
   const chats = leerChats();
 
-  if (!chats[chatId]) {
-    chats[chatId] = {
-      userId: userId || 'default_user',
-      titulo: 'Nuevo Chat',
-      mensajes: [SYSTEM_INSTRUCTION]
-    };
+  if (!chats[chatId] || chats[chatId].userId !== userId) {
+    return res.status(404).json({ error: "El chat no pertenece a este usuario." });
   }
 
   try {
@@ -125,7 +133,8 @@ app.post('/api/chat', async (req, res) => {
 
     chats[chatId].mensajes.push({ role: 'user', content: message });
 
-   const completion = await groq.chat.completions.create({
+    // Petición a Groq con el modelo activo en producción
+    const completion = await groq.chat.completions.create({
       messages: chats[chatId].mensajes,
       model: 'openai/gpt-oss-20b',
     });
@@ -137,7 +146,7 @@ app.post('/api/chat', async (req, res) => {
 
     res.json({ reply: respuestaIA, titulo: chats[chatId].titulo });
   } catch (error) {
-    console.error("❌ Error de comunicación con Groq:", error);
+    console.error("❌ Error en Groq:", error);
     res.status(500).json({ error: error.message || "Error al procesar el mensaje." });
   }
 });

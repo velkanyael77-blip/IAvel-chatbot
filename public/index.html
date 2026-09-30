@@ -1,156 +1,462 @@
-import express from 'express';
-import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import Groq from 'groq-sdk';
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
-});
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-const CHATS_FILE = path.join(__dirname, 'chats.json');
-
-function leerChats() {
-  if (!fs.existsSync(CHATS_FILE)) {
-    fs.writeFileSync(CHATS_FILE, JSON.stringify({}), 'utf-8');
-    return {};
-  }
-  try {
-    const data = fs.readFileSync(CHATS_FILE, 'utf-8');
-    return JSON.parse(data);
-  } catch (err) {
-    return {};
-  }
-}
-
-function guardarChats(chats) {
-  fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf-8');
-}
-
-const SYSTEM_INSTRUCTION = {
-  role: 'system',
-  content: 'Eres IAvel, un asistente virtual útil, atento, amigable y muy inteligente.'
-};
-
-// --- RUTAS API CON AISLAMIENTO DE USUARIO ---
-
-// 1. Obtener únicamente los chats pertenecientes a este userId
-app.get('/api/chats', (req, res) => {
-  const userId = req.query.userId;
-  if (!userId) return res.json([]);
-
-  const chats = leerChats();
-  
-  const lista = Object.keys(chats)
-    .filter(id => chats[id].userId === userId)
-    .map(id => ({
-      id,
-      titulo: chats[id].titulo || 'Nuevo Chat'
-    }));
-    
-  res.json(lista);
-});
-
-// 2. Crear un nuevo chat asignado al userId del cliente
-app.post('/api/chats/nuevo', (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'Falta identificador de usuario (userId).' });
-
-  const chats = leerChats();
-  const id = 'chat_' + Date.now();
-
-  chats[id] = {
-    userId,
-    titulo: 'Nuevo Chat',
-    mensajes: [SYSTEM_INSTRUCTION]
-  };
-  guardarChats(chats);
-  res.json({ id, titulo: chats[id].titulo });
-});
-
-// 3. Obtener conversación si pertenece al userId
-app.get('/api/chats/:id', (req, res) => {
-  const userId = req.query.userId;
-  const chats = leerChats();
-  const chat = chats[req.params.id];
-  
-  if (!chat || chat.userId !== userId) {
-    return res.status(404).json({ error: 'Chat no encontrado o no autorizado.' });
-  }
-  
-  const mensajesVisibles = chat.mensajes.filter(m => m.role !== 'system');
-  res.json({ titulo: chat.titulo, mensajes: mensajesVisibles });
-});
-
-// 4. Eliminar chat si pertenece al userId
-app.delete('/api/chats/:id', (req, res) => {
-  const userId = req.query.userId;
-  const chats = leerChats();
-  const chat = chats[req.params.id];
-
-  if (chat && chat.userId === userId) {
-    delete chats[req.params.id];
-    guardarChats(chats);
-    return res.json({ success: true });
-  }
-  res.status(404).json({ error: 'Chat no encontrado.' });
-});
-
-// 5. Enviar mensaje a Groq
-app.post('/api/chat', async (req, res) => {
-  const { chatId, userId, message } = req.body;
-
-  if (!message || !chatId || !userId) {
-    return res.status(400).json({ error: "Faltan parámetros de mensaje o usuario." });
-  }
-
-  if (!process.env.GROQ_API_KEY) {
-    return res.status(500).json({ error: "Falta configurar GROQ_API_KEY en las variables de entorno de Render." });
-  }
-
-  const chats = leerChats();
-
-  if (!chats[chatId] || chats[chatId].userId !== userId) {
-    return res.status(404).json({ error: "El chat no pertenece a este usuario." });
-  }
-
-  try {
-    if (chats[chatId].titulo === 'Nuevo Chat') {
-      chats[chatId].titulo = message.slice(0, 25) + (message.length > 25 ? '...' : '');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+  <title>IAvel Chatbot</title>
+  <style>
+    :root {
+      --bg-dark: #0a110e;
+      --bg-sidebar: #111e19;
+      --bg-chat: #182822;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --text-main: #e6f4f1;
+      --text-muted: #80a89d;
+      --border-color: #1f382f;
+      --message-user: #064e3b;
     }
 
-    chats[chatId].mensajes.push({ role: 'user', content: message });
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-    // Petición a Groq con el modelo activo en producción
-    const completion = await groq.chat.completions.create({
-      messages: chats[chatId].mensajes,
-      model: 'openai/gpt-oss-20b',
-    });
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
 
-    const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
+    #app {
+      display: flex;
+      height: 100%;
+      width: 100%;
+      position: relative;
+    }
 
-    chats[chatId].mensajes.push({ role: 'assistant', content: respuestaIA });
-    guardarChats(chats);
+    .top-header {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-sidebar);
+      border-bottom: 1px solid var(--border-color);
+      z-index: 10;
+    }
 
-    res.json({ reply: respuestaIA, titulo: chats[chatId].titulo });
-  } catch (error) {
-    console.error("❌ Error en Groq:", error);
-    res.status(500).json({ error: error.message || "Error al procesar el mensaje." });
-  }
-});
+    .hamburger-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--accent);
+      font-size: 22px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
 
-app.listen(PORT, () => {
-  console.log(`Servidor IAvel ejecutándose en el puerto ${PORT}`);
-});
+    .top-title {
+      font-weight: bold;
+      color: var(--accent);
+      font-size: 1.1rem;
+    }
+
+    .sidebar {
+      width: 260px;
+      background-color: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      padding: 15px;
+      transition: transform 0.3s ease;
+      z-index: 20;
+    }
+
+    .btn-nuevo {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 15px;
+      transition: background 0.2s;
+    }
+
+    .btn-nuevo:hover {
+      background: var(--accent-hover);
+    }
+
+    .chat-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .chat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .chat-item:hover {
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    .chat-item.active {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: var(--accent);
+    }
+
+    .chat-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.9rem;
+      max-width: 170px;
+    }
+
+    .btn-delete {
+      background: transparent;
+      border: none;
+      color: #f87171;
+      cursor: pointer;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .btn-delete:hover {
+      background: rgba(248, 113, 113, 0.2);
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      position: relative;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      line-height: 1.4;
+      word-break: break-word;
+      font-size: 0.95rem;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: var(--message-user);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-bottom-right-radius: 2px;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      background: var(--bg-chat);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-bottom-left-radius: 2px;
+    }
+
+    .message.system-error {
+      align-self: center;
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+      font-size: 0.85rem;
+    }
+
+    .message.loading {
+      align-self: flex-start;
+      background: var(--bg-chat);
+      color: var(--text-muted);
+      font-style: italic;
+      border: 1px dashed var(--border-color);
+    }
+
+    .chat-input-area {
+      display: flex;
+      padding: 15px;
+      background: var(--bg-sidebar);
+      border-top: 1px solid var(--border-color);
+      gap: 10px;
+    }
+
+    .chat-input-area input {
+      flex: 1;
+      padding: 14px 18px;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 25px;
+      color: var(--text-main);
+      outline: none;
+      font-size: 16px !important;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    .chat-input-area input:focus {
+      border-color: var(--accent);
+    }
+
+    .chat-input-area button {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 0 20px;
+      border-radius: 25px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .chat-input-area button:hover {
+      background: var(--accent-hover);
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      z-index: 15;
+    }
+
+    @media (max-width: 768px) {
+      #app {
+        flex-direction: column;
+      }
+
+      .top-header {
+        display: flex;
+      }
+
+      .sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        transform: translateX(-100%);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay.open {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMenu()"></div>
+
+    <div class="sidebar" id="sidebar">
+      <button class="btn-nuevo" onclick="crearNuevoChat()">+ Nuevo Chat</button>
+      <div class="chat-list" id="chatList"></div>
+    </div>
+    
+    <div class="main-content">
+      <div class="top-header">
+        <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
+        <span class="top-title">IAvel</span>
+        <div style="width: 30px;"></div>
+      </div>
+
+      <div class="chat-messages" id="chatMessages"></div>
+      
+      <form class="chat-input-area" onsubmit="handleSend(event)">
+        <input 
+          type="text" 
+          id="userInput" 
+          placeholder="Escribe un mensaje..." 
+          autocomplete="off"
+        >
+        <button type="submit" id="sendBtn">Enviar</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentChatId = null;
+
+    // Generador o recuperador de identificador único por dispositivo
+    function getUserId() {
+      let userId = localStorage.getItem('iavel_user_id');
+      if (!userId) {
+        userId = 'user_' + Math.random().toString(36).substring(2, 11) + Date.now();
+        localStorage.setItem('iavel_user_id', userId);
+      }
+      return userId;
+    }
+
+    const USER_ID = getUserId();
+
+    function toggleMenu() {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    }
+
+    async function cargarChats() {
+      try {
+        const res = await fetch(`/api/chats?userId=${USER_ID}`);
+        const chats = await res.json();
+        const listContainer = document.getElementById('chatList');
+        listContainer.innerHTML = '';
+
+        chats.forEach(chat => {
+          const div = document.createElement('div');
+          div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+          div.onclick = () => {
+            seleccionarChat(chat.id);
+            if (window.innerWidth <= 768) toggleMenu();
+          };
+          div.innerHTML = `
+            <span class="chat-title">${chat.titulo}</span>
+            <button class="btn-delete" onclick="eliminarChat(event, '${chat.id}')">✕</button>
+          `;
+          listContainer.appendChild(div);
+        });
+
+        if (!currentChatId && chats.length > 0) {
+          seleccionarChat(chats[0].id);
+        } else if (chats.length === 0) {
+          crearNuevoChat();
+        }
+      } catch (err) {
+        console.error("Error al cargar chats:", err);
+      }
+    }
+
+    async function crearNuevoChat() {
+      try {
+        const res = await fetch('/api/chats/nuevo', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: USER_ID })
+        });
+        const chat = await res.json();
+        currentChatId = chat.id;
+        await cargarChats();
+        seleccionarChat(chat.id);
+      } catch (err) {
+        console.error("Error al crear chat:", err);
+      }
+    }
+
+    async function seleccionarChat(id) {
+      currentChatId = id;
+      try {
+        const res = await fetch(`/api/chats/${id}?userId=${USER_ID}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const container = document.getElementById('chatMessages');
+        container.innerHTML = '';
+        
+        if (!data.mensajes || data.mensajes.length === 0) {
+          agregarMensajePantalla('assistant', '¡Hola! Soy IAvel. ¿En qué te puedo ayudar hoy?');
+        } else {
+          data.mensajes.forEach(msg => {
+            agregarMensajePantalla(msg.role, msg.content);
+          });
+        }
+
+        cargarChats();
+      } catch (err) {
+        console.error("Error al seleccionar chat:", err);
+      }
+    }
+
+    async function eliminarChat(e, id) {
+      e.stopPropagation();
+      await fetch(`/api/chats/${id}?userId=${USER_ID}`, { method: 'DELETE' });
+      if (currentChatId === id) currentChatId = null;
+      cargarChats();
+    }
+
+    function agregarMensajePantalla(role, content) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      div.textContent = content;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+      return div;
+    }
+
+    async function handleSend(e) {
+      e.preventDefault();
+      const input = document.getElementById('userInput');
+      const sendBtn = document.getElementById('sendBtn');
+      const message = input.value.trim();
+      if (!message || !currentChatId) return;
+
+      input.value = '';
+      sendBtn.disabled = true;
+
+      agregarMensajePantalla('user', message);
+      const loadingMsg = agregarMensajePantalla('loading', 'IAvel está escribiendo...');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: currentChatId, userId: USER_ID, message })
+        });
+
+        const data = await res.json();
+        loadingMsg.remove();
+
+        if (res.ok && data.reply) {
+          agregarMensajePantalla('assistant', data.reply);
+          cargarChats();
+        } else {
+          agregarMensajePantalla('system-error', `⚠️ ${data.error || 'No se pudo obtener respuesta.'}`);
+        }
+      } catch (err) {
+        loadingMsg.remove();
+        agregarMensajePantalla('system-error', '⚠️ Error de conexión con el servidor.');
+        console.error(err);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    cargarChats();
+  </script>
+</body>
+</html>
