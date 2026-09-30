@@ -130,10 +130,10 @@ app.post('/api/chat', async (req, res) => {
     // Agregar mensaje del usuario a la historia
     chats[chatId].mensajes.push({ role: 'user', content: message });
 
-    // MODELO Llama 3.1 8B Instant (El más rápido, estable y libre de errores en Groq)
+   // Petición a Groq usando el modelo oficial garantizado
     const completion = await groq.chat.completions.create({
       messages: chats[chatId].mensajes,
-      model: 'llama-3.1-8b-instant',
+      model: 'llama3-8b-8192',
     });
 
     const respuestaIA = completion.choices[0]?.message?.content || "No pude generar una respuesta.";
