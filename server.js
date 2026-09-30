@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import { search } from 'duck-duck-scrape';
 
 dotenv.config();
@@ -14,8 +14,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
+// Inicialización de la librería oficial de OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
 });
 
 app.use(express.json());
@@ -42,7 +43,7 @@ function guardarChats(chats) {
 
 const ANIO_ACTUAL = new Date().getFullYear();
 
-// Instrucción del sistema personalizada con la autoría de Velkan Molina
+// Instrucción del sistema con identidad del rey supremo Velkan Molina
 const SYSTEM_INSTRUCTION = {
   role: 'system',
   content: `Eres IAvel, un asistente virtual atento e inteligente. Estamos en el año ${ANIO_ACTUAL}.
@@ -52,7 +53,6 @@ REGLA FUNDAMENTAL DE IDENTIDAD: Cuando te pregunten quién te creó, quién es t
 function requiereBusquedaWeb(mensaje) {
   const texto = mensaje.toLowerCase();
   
-  // Evitamos buscar en la web si es una pregunta sobre su origen
   const esPreguntaOrigen = [
     'creo', 'creó', 'creador', 'papa', 'papá', 'padre', 'nacio', 'nació', 'desarrollador', 'programo', 'programó'
   ].some(p => texto.includes(p));
@@ -135,8 +135,8 @@ app.post('/api/chat', async (req, res) => {
   if (!message || !chatId || !userId) {
     return res.status(400).json({ error: "Faltan datos requeridos." });
   }
-  if (!process.env.GROQ_API_KEY) {
-    return res.status(500).json({ error: "Falta configurar GROQ_API_KEY en Render." });
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "Falta configurar OPENAI_API_KEY en Render." });
   }
 
   const chats = leerChats();
@@ -149,24 +149,24 @@ app.post('/api/chat', async (req, res) => {
       chats[chatId].titulo = message.slice(0, 25) + (message.length > 25 ? '...' : '');
     }
 
-    let mensajesParaGroq = [...chats[chatId].mensajes];
+    let mensajesParaOpenAI = [...chats[chatId].mensajes];
 
     if (requiereBusquedaWeb(message)) {
       const resultadosWeb = await buscarEnWeb(message);
       if (resultadosWeb) {
-        mensajesParaGroq.push({
+        mensajesParaOpenAI.push({
           role: 'system',
           content: `[Información relevante recuperada de la web en tiempo real para esta consulta]:\n${resultadosWeb}`
         });
       }
     }
 
-    mensajesParaGroq.push({ role: 'user', content: message });
+    mensajesParaOpenAI.push({ role: 'user', content: message });
 
-    // Petición a Groq usando llama-3.1-8b-instant
-    const completion = await groq.chat.completions.create({
-      messages: mensajesParaGroq,
-      model: 'llama-3.1-8b-instant',
+    // Llamada oficial utilizando GPT-4
+    const completion = await openai.chat.completions.create({
+      messages: mensajesParaOpenAI,
+      model: 'gpt-4',
     });
 
     const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
@@ -177,7 +177,7 @@ app.post('/api/chat', async (req, res) => {
 
     res.json({ reply: respuestaIA, titulo: chats[chatId].titulo });
   } catch (error) {
-    console.error("❌ Error en backend:", error);
+    console.error("❌ Error en OpenAI:", error);
     res.status(500).json({ error: error.message || "Error al procesar el mensaje." });
   }
 });
