@@ -1,389 +1,283 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>IAvel - Multichat</title>
+  <!-- Corrección de viewport para desbloquear el enfoque en teclados táctiles -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+  <title>IAvel Chatbot</title>
   <style>
     :root {
-      --bg-dark: #06140e;
-      --card-bg: #0b1f17;
-      --header-bg: #112d22;
-      --sidebar-bg: #081912;
-      --accent-green: #10b981;
-      --accent-hover: #059669;
-      --user-msg: #047857;
-      --bot-msg: #133a2c;
-      --text-main: #ecfdf5;
-      --text-sub: #6ee7b7;
-      --border-color: rgba(16, 185, 129, 0.2);
-      --danger-color: #ef4444;
+      --bg-dark: #1e1e2f;
+      --bg-sidebar: #141421;
+      --bg-chat: #2a2a40;
+      --accent: #6c5ce7;
+      --text-main: #ffffff;
+      --border-color: #3f3f5e;
     }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    html,
-    body {
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
       background-color: var(--bg-dark);
       color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
-    .app-layout {
+    #app {
       display: flex;
-      width: 100vw;
-      height: 100vh;
+      height: 100%;
+      width: 100%;
     }
 
-    /* Barra lateral */
+    /* Sidebar */
     .sidebar {
-      width: 280px;
-      background: var(--sidebar-bg);
+      width: 260px;
+      background-color: var(--bg-sidebar);
       border-right: 1px solid var(--border-color);
       display: flex;
       flex-direction: column;
-      padding: 16px;
-      gap: 16px;
+      padding: 15px;
     }
 
-    .btn-new-chat {
-      background: var(--accent-green);
-      color: #042f2e;
+    .btn-nuevo {
+      background: var(--accent);
+      color: white;
       border: none;
       padding: 12px;
       border-radius: 8px;
-      font-weight: 700;
       cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-new-chat:hover {
-      background: var(--accent-hover);
-      color: #fff;
+      font-weight: bold;
+      margin-bottom: 15px;
     }
 
     .chat-list {
       flex: 1;
       overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
     }
 
     .chat-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.03);
+      padding: 10px;
+      margin-bottom: 5px;
+      background: rgba(255, 255, 255, 0.05);
       border-radius: 6px;
       cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.2s;
     }
 
-    .chat-item:hover,
     .chat-item.active {
-      background: var(--header-bg);
-      border-color: var(--border-color);
+      background: var(--accent);
     }
 
-    .chat-item .title {
-      font-size: 0.9rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-    }
-
-    .chat-item .btn-delete {
-      background: none;
+    .btn-delete {
+      background: transparent;
       border: none;
-      color: var(--text-sub);
+      color: #ff5252;
       cursor: pointer;
-      font-size: 0.9rem;
-      padding: 2px 6px;
-      border-radius: 4px;
+      font-weight: bold;
     }
 
-    .chat-item .btn-delete:hover {
-      color: var(--danger-color);
-      background: rgba(239, 68, 68, 0.1);
-    }
-
-    /* Contenedor Principal del Chat */
-    .chat-container {
+    /* Chat Container */
+    .main-content {
       flex: 1;
       display: flex;
       flex-direction: column;
-      background: var(--card-bg);
-    }
-
-    .chat-header {
-      background: var(--header-bg);
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .status-dot {
-      width: 12px;
-      height: 12px;
-      background-color: var(--accent-green);
-      border-radius: 50%;
-      box-shadow: 0 0 10px var(--accent-green);
+      height: 100%;
     }
 
     .chat-messages {
       flex: 1;
-      padding: 24px;
+      padding: 20px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      scroll-behavior: smooth;
+      gap: 12px;
     }
 
     .message {
-      max-width: 75%;
-      padding: 14px 18px;
-      border-radius: 18px;
-      font-size: 1rem;
-      line-height: 1.5;
-      word-wrap: break-word;
-      animation: fadeIn 0.2s ease-in-out;
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      line-height: 1.4;
+      word-break: break-word;
     }
 
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(6px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .user {
+    .message.user {
       align-self: flex-end;
-      background: var(--user-msg);
-      color: #ffffff;
-      border-bottom-right-radius: 4px;
+      background: var(--accent);
     }
 
-    .bot {
+    .message.assistant {
       align-self: flex-start;
-      background: var(--bot-msg);
-      color: var(--text-main);
-      border-bottom-left-radius: 4px;
-      border: 1px solid var(--border-color);
+      background: var(--bg-chat);
     }
 
-    .typing {
-      font-style: italic;
-      color: var(--text-sub);
-      background: transparent;
-      border: none;
-    }
-
+    /* Formulario de entrada optimizado para táctil */
     .chat-input-area {
       display: flex;
-      padding: 18px 24px;
-      background: var(--header-bg);
+      padding: 15px;
+      background: var(--bg-sidebar);
       border-top: 1px solid var(--border-color);
-      gap: 12px;
+      gap: 10px;
     }
 
     .chat-input-area input {
       flex: 1;
-      padding: 14px 20px;
+      padding: 14px 18px;
       background: var(--bg-dark);
       border: 1px solid var(--border-color);
-      border-radius: 30px;
+      border-radius: 25px;
       color: var(--text-main);
       outline: none;
-      font-size: 1rem;
+      /* ⚠️ Clave para iOS/Android: 16px evita el bloqueo/zoom al tocar */
+      font-size: 16px !important;
+      -webkit-user-select: text;
+      user-select: text;
     }
 
     .chat-input-area button {
-      padding: 14px 28px;
-      background: var(--accent-green);
-      color: #042f2e;
+      background: var(--accent);
+      color: white;
       border: none;
-      border-radius: 30px;
+      padding: 0 20px;
+      border-radius: 25px;
+      font-weight: bold;
       cursor: pointer;
-      font-weight: 700;
     }
 
+    /* Ocultar barra lateral en pantallas pequeñas */
     @media (max-width: 768px) {
       .sidebar {
-        width: 200px;
-      }
-
-      .message {
-        max-width: 88%;
+        display: none;
       }
     }
   </style>
 </head>
-
 <body>
-
-  <div class="app-layout">
+  <div id="app">
     <div class="sidebar">
-      <button class="btn-new-chat" onclick="crearNuevoChat()">+ Nuevo Chat</button>
+      <button class="btn-nuevo" onclick="crearNuevoChat()">+ Nuevo Chat</button>
       <div class="chat-list" id="chatList"></div>
     </div>
-
-    <div class="chat-container">
-      <div class="chat-header">
-        <div class="status-dot"></div>
-        <h2>IAvel</h2>
-      </div>
-
+    
+    <div class="main-content">
       <div class="chat-messages" id="chatMessages"></div>
-
       
-      <form class="chat-input-area" onsubmit="event.preventDefault(); enviarMensaje();">
-        <input type="text" id="userInput" placeholder="Escribe un mensaje..." autocomplete="off" autocorrect="on"
-          autocapitalize="sentences" />
+      <form class="chat-input-area" onsubmit="handleSend(event)">
+        <input 
+          type="text" 
+          id="userInput" 
+          placeholder="Escribe un mensaje..." 
+          autocomplete="off"
+        >
         <button type="submit">Enviar</button>
       </form>
     </div>
   </div>
 
   <script>
-    let activeChatId = null;
+    let currentChatId = null;
 
-    async function cargarListaChats() {
+    async function cargarChats() {
       const res = await fetch('/api/chats');
       const chats = await res.json();
       const listContainer = document.getElementById('chatList');
       listContainer.innerHTML = '';
 
-      if (chats.length === 0) {
-        await crearNuevoChat();
-        return;
-      }
-
       chats.forEach(chat => {
-        const item = document.createElement('div');
-        item.className = `chat-item ${chat.id === activeChatId ? 'active' : ''}`;
-        item.onclick = () => seleccionarChat(chat.id);
-
-        item.innerHTML = `
-          <span class="title">${chat.titulo}</span>
+        const div = document.createElement('div');
+        div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+        div.onclick = () => seleccionarChat(chat.id);
+        div.innerHTML = `
+          <span>${chat.titulo}</span>
           <button class="btn-delete" onclick="eliminarChat(event, '${chat.id}')">✕</button>
         `;
-        listContainer.appendChild(item);
+        listContainer.appendChild(div);
       });
 
-      if (!activeChatId && chats.length > 0) {
+      if (!currentChatId && chats.length > 0) {
         seleccionarChat(chats[0].id);
+      } else if (chats.length === 0) {
+        crearNuevoChat();
       }
     }
 
     async function crearNuevoChat() {
       const res = await fetch('/api/chats/nuevo', { method: 'POST' });
-      const nuevoChat = await res.json();
-      activeChatId = nuevoChat.id;
-      await cargarListaChats();
-      seleccionarChat(activeChatId);
+      const chat = await res.json();
+      currentChatId = chat.id;
+      await cargarChats();
+      seleccionarChat(chat.id);
     }
 
     async function seleccionarChat(id) {
-      activeChatId = id;
-      document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-      await cargarListaChats();
-
+      currentChatId = id;
       const res = await fetch(`/api/chats/${id}`);
+      if (!res.ok) return;
       const data = await res.json();
+      
       const container = document.getElementById('chatMessages');
       container.innerHTML = '';
+      
+      data.mensajes.forEach(msg => {
+        agregarMensajePantalla(msg.role, msg.content);
+      });
 
-      if (data.mensajes.length === 0) {
-        container.innerHTML = '<div class="message bot">Que onda, soy IAvel. ¿En qué te puedo ayudar hoy?</div>';
-      } else {
-        data.mensajes.forEach(m => {
-          const div = document.createElement('div');
-          div.className = `message ${m.role === 'user' ? 'user' : 'bot'}`;
-          div.textContent = m.content;
-          container.appendChild(div);
-        });
-      }
+      cargarChats();
+    }
+
+    async function eliminarChat(e, id) {
+      e.stopPropagation();
+      await fetch(`/api/chats/${id}`, { method: 'DELETE' });
+      if (currentChatId === id) currentChatId = null;
+      cargarChats();
+    }
+
+    function agregarMensajePantalla(role, content) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      div.textContent = content;
+      container.appendChild(div);
       container.scrollTop = container.scrollHeight;
     }
 
-    async function eliminarChat(event, id) {
-      event.stopPropagation();
-      if (!confirm('¿Deseas eliminar esta conversación?')) return;
+    async function handleSend(e) {
+      e.preventDefault();
+      const input = document.getElementById('userInput');
+      const message = input.value.trim();
+      if (!message || !currentChatId) return;
 
-      await fetch(`/api/chats/${id}`, { method: 'DELETE' });
-      if (activeChatId === id) activeChatId = null;
-      await cargarListaChats();
-    }
-
-    async function enviarMensaje() {
-      const inputElement = document.getElementById('userInput');
-      const messagesContainer = document.getElementById('chatMessages');
-      const text = inputElement.value.trim();
-
-      if (!text || !activeChatId) return;
-
-      const userDiv = document.createElement('div');
-      userDiv.className = 'message user';
-      userDiv.textContent = text;
-      messagesContainer.appendChild(userDiv);
-
-      inputElement.value = '';
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-      const loadingDiv = document.createElement('div');
-      loadingDiv.className = 'message bot typing';
-      loadingDiv.textContent = 'Escribiendo...';
-      messagesContainer.appendChild(loadingDiv);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      input.value = '';
+      agregarMensajePantalla('user', message);
 
       try {
-        const response = await fetch('/api/chat', {
+        const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatId: activeChatId, message: text })
+          body: JSON.stringify({ chatId: currentChatId, message })
         });
-
-        const data = await response.json();
-        loadingDiv.classList.remove('typing');
-
+        const data = await res.json();
+        
         if (data.reply) {
-          loadingDiv.textContent = data.reply;
-          cargarListaChats(); // Actualizar el título si cambió
-        } else {
-          loadingDiv.textContent = '⚠️ Error al obtener respuesta.';
+          agregarMensajePantalla('assistant', data.reply);
+          cargarChats();
         }
-      } catch (error) {
-        loadingDiv.classList.remove('typing');
-        loadingDiv.textContent = '❌ Error de conexión.';
+      } catch (err) {
+        console.error(err);
       }
-
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Cargar historial al iniciar
-    cargarListaChats();
+    cargarChats();
   </script>
-
 </body>
-
 </html>
