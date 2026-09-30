@@ -14,10 +14,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Inicialización de la librería oficial de OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+ const completion = await groq.chat.completions.create({
+      messages: chats[chatId].mensajes,
+      model: 'openai/gpt-oss-20b',
+    });
+
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
