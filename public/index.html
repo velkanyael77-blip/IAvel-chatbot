@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>IAvel - Multichat</title>
   <style>
     :root {
@@ -27,7 +28,8 @@
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
 
-    html, body {
+    html,
+    body {
       width: 100vw;
       height: 100vh;
       overflow: hidden;
@@ -88,7 +90,8 @@
       transition: all 0.2s;
     }
 
-    .chat-item:hover, .chat-item.active {
+    .chat-item:hover,
+    .chat-item.active {
       background: var(--header-bg);
       border-color: var(--border-color);
     }
@@ -162,8 +165,15 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .user {
@@ -218,11 +228,17 @@
     }
 
     @media (max-width: 768px) {
-      .sidebar { width: 200px; }
-      .message { max-width: 88%; }
+      .sidebar {
+        width: 200px;
+      }
+
+      .message {
+        max-width: 88%;
+      }
     }
   </style>
 </head>
+
 <body>
 
   <div class="app-layout">
@@ -239,10 +255,12 @@
 
       <div class="chat-messages" id="chatMessages"></div>
 
-      <div class="chat-input-area">
-        <input type="text" id="userInput" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter') enviarMensaje()">
-        <button onclick="enviarMensaje()">Enviar</button>
-      </div>
+      
+      <form class="chat-input-area" onsubmit="event.preventDefault(); enviarMensaje();">
+        <input type="text" id="userInput" placeholder="Escribe un mensaje..." autocomplete="off" autocorrect="on"
+          autocapitalize="sentences" />
+        <button type="submit">Enviar</button>
+      </form>
     </div>
   </div>
 
@@ -367,4 +385,5 @@
   </script>
 
 </body>
+
 </html>
