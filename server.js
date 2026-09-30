@@ -13,7 +13,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Inicialización de Groq con la API Key
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
@@ -45,9 +44,8 @@ const SYSTEM_INSTRUCTION = {
   content: 'Eres IAvel, un asistente virtual útil, atento, amigable y muy inteligente.'
 };
 
-// --- RUTAS DEL API ---
+// --- RUTAS API ---
 
-// 1. Obtener lista de chats del usuario
 app.get('/api/chats', (req, res) => {
   const userId = req.query.userId || 'default_user';
   const chats = leerChats();
@@ -62,7 +60,6 @@ app.get('/api/chats', (req, res) => {
   res.json(lista);
 });
 
-// 2. Crear un nuevo chat
 app.post('/api/chats/nuevo', (req, res) => {
   const userId = req.body.userId || 'default_user';
   const chats = leerChats();
@@ -77,7 +74,6 @@ app.post('/api/chats/nuevo', (req, res) => {
   res.json({ id, titulo: chats[id].titulo });
 });
 
-// 3. Obtener conversación específica
 app.get('/api/chats/:id', (req, res) => {
   const userId = req.query.userId || 'default_user';
   const chats = leerChats();
@@ -91,7 +87,6 @@ app.get('/api/chats/:id', (req, res) => {
   res.json({ titulo: chat.titulo, mensajes: mensajesVisibles });
 });
 
-// 4. Eliminar un chat
 app.delete('/api/chats/:id', (req, res) => {
   const chats = leerChats();
   if (chats[req.params.id]) {
@@ -102,7 +97,6 @@ app.delete('/api/chats/:id', (req, res) => {
   res.status(404).json({ error: 'Chat no encontrado' });
 });
 
-// 5. Enviar mensaje a la IA (Groq)
 app.post('/api/chat', async (req, res) => {
   const { chatId, userId, message } = req.body;
 
@@ -110,9 +104,12 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: "Faltan datos requeridos." });
   }
 
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(500).json({ error: "Falta configurar la GROQ_API_KEY en Render." });
+  }
+
   const chats = leerChats();
 
-  // Si el chat no existe, lo creamos automáticamente
   if (!chats[chatId]) {
     chats[chatId] = {
       userId: userId || 'default_user',
@@ -122,29 +119,26 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    // Actualizar título con los primeros caracteres del primer mensaje
     if (chats[chatId].titulo === 'Nuevo Chat') {
       chats[chatId].titulo = message.slice(0, 25) + (message.length > 25 ? '...' : '');
     }
 
-    // Agregar mensaje del usuario a la historia
     chats[chatId].mensajes.push({ role: 'user', content: message });
 
- const completion = await groq.chat.completions.create({
+    const completion = await groq.chat.completions.create({
       messages: chats[chatId].mensajes,
       model: 'llama-3.3-70b-versatile',
     });
 
-    const respuestaIA = completion.choices[0]?.message?.content || "No pude generar una respuesta.";
+    const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
 
-    // Guardar respuesta de la IA
     chats[chatId].mensajes.push({ role: 'assistant', content: respuestaIA });
     guardarChats(chats);
 
     res.json({ reply: respuestaIA, titulo: chats[chatId].titulo });
   } catch (error) {
-    console.error("❌ Error en backend Groq:", error);
-    res.status(500).json({ error: "Error en el servidor de IA. Revisa la consola o tu GROQ_API_KEY." });
+    console.error("❌ Error de comunicación con Groq:", error);
+    res.status(500).json({ error: error.message || "Error al procesar el mensaje." });
   }
 });
 
