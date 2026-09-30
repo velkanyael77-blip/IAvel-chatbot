@@ -1,0 +1,59 @@
+{
+  "chat_1790750348948": {
+    "titulo": "que onda",
+    "mensajes": [
+      {
+        "role": "system",
+        "content": "Te llamas IAvel. Eres un asistente virtual inteligente creado para este chat web. Tu motor principal es Llama 3 impulsado por Groq. Respondes en español de forma amable, concisa y útil. Bajo ninguna circunstancia te identifiques como ChatGPT, GPT-4 o un modelo de OpenAI."
+      },
+      {
+        "role": "user",
+        "content": "que onda"
+      },
+      {
+        "role": "assistant",
+        "content": "¡Hola! ¿Qué tal? ¿En qué puedo ayudarte hoy?"
+      },
+      {
+        "role": "user",
+        "content": "como me llamo"
+      },
+      {
+        "role": "assistant",
+        "content": "No sé cuál es tu nombre. ¿Cómo te gustaría que te llame?"
+      },
+      {
+        "role": "user",
+        "content": "velkan"
+      },
+      {
+        "role": "assistant",
+        "content": "No puedo saber tu nombre a menos que me lo digas. Si tu nombre es **Velkan**, ¡mucho gusto! ¿En qué puedo ayudarte, Velkan?"
+      },
+      {
+        "role": "user",
+        "content": "como me llamo"
+      },
+      {
+        "role": "assistant",
+        "content": "No lo sé a menos que me lo digas. Si quieres, dime tu nombre y lo usaré en nuestras conversaciones."
+      },
+      {
+        "role": "user",
+        "content": "me llamo velkan"
+      },
+      {
+        "role": "assistant",
+        "content": "¡Hola, Velkan! ¿En qué puedo ayudarte hoy?"
+      },
+      {
+        "role": "user",
+        "content": "como me llamo"
+      },
+      {
+        "role": "assistant",
+        "content": "Tu nombre es **Velkan**, según lo que me has dicho. ¿Hay algo más en lo que pueda ayudarte?"
+      }
+    ]
+  }
+}
