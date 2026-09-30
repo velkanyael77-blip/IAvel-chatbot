@@ -40,32 +40,37 @@ function guardarChats(chats) {
   fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf-8');
 }
 
+// Obtener el año actual dinámicamente
+const ANIO_ACTUAL = new Date().getFullYear();
+
 const SYSTEM_INSTRUCTION = {
   role: 'system',
-  content: 'Eres IAvel, un asistente virtual basado en inteligencia artificial. Recuerda responder con cortesía, claridad y concisión utilizando formato Markdown cuando corresponda.'
+  content: `Eres IAvel, un asistente virtual basado en inteligencia artificial. Estamos en el año ${ANIO_ACTUAL}. Cuando se te proporcione información o resultados de búsqueda web en tiempo real, prioriza esos datos para responder. Si la pregunta requiere datos actuales y se te proporciona contexto web, utilízalo directamente sin asumir que tu conocimiento está limitado a años pasados.`
 };
 
-// Función para verificar si la pregunta requiere información en tiempo real
+// Función para determinar si se requiere búsqueda en la web
 function requiereBusquedaWeb(mensaje) {
   const texto = mensaje.toLowerCase();
+  
   const palabrasClave = [
     'hoy', 'noticia', 'noticias', 'reciente', 'actual', 'ahora',
-    'quien gano', 'resultado', 'precio', 'clima', 'tiempo', '2025', '2026',
-    'donde esta', 'quien es el presidente', 'estrenos', 'dolar'
+    'quien gano', 'resultado', 'precio', 'clima', 'tiempo',
+    'quien es', 'presidente', 'estrenos', 'dolar', 'quien gano el'
   ];
-  return palabrasClave.some(p => texto.includes(p));
+
+  return palabrasClave.some(p => texto.includes(p)) || texto.includes('?');
 }
 
-// Búsqueda ultra-rápida (limitada a 2 resultados clave)
+// Búsqueda en la web
 async function buscarEnWeb(query) {
   try {
     const searchResults = await search(query, { safeSearch: 0 });
     if (searchResults && searchResults.results.length > 0) {
-      const topResults = searchResults.results.slice(0, 2);
+      const topResults = searchResults.results.slice(0, 3);
       return topResults.map(r => `- ${r.title}: ${r.snippet}`).join('\n');
     }
   } catch (error) {
-    console.error("Error en búsqueda web rápida:", error);
+    console.error("Error en búsqueda web:", error);
   }
   return null;
 }
@@ -150,17 +155,15 @@ app.post('/api/chat', async (req, res) => {
 
     let mensajeProcesado = message;
 
-    // Solo buscar en la web si el mensaje lo necesita
     if (requiereBusquedaWeb(message)) {
       const resultadosWeb = await buscarEnWeb(message);
       if (resultadosWeb) {
-        mensajeProcesado = `[Datos de búsqueda web actualizados]:\n${resultadosWeb}\n\nPregunta: ${message}`;
+        mensajeProcesado = `[Datos de búsqueda en tiempo real de internet (${ANIO_ACTUAL})]:\n${resultadosWeb}\n\nPregunta del usuario: ${message}`;
       }
     }
 
     chats[chatId].mensajes.push({ role: 'user', content: mensajeProcesado });
 
-    // Consulta veloz con el modelo openai/gpt-oss-20b
     const completion = await groq.chat.completions.create({
       messages: chats[chatId].mensajes,
       model: 'openai/gpt-oss-20b',
@@ -168,7 +171,6 @@ app.post('/api/chat', async (req, res) => {
 
     const respuestaIA = completion.choices[0]?.message?.content || "Sin respuesta";
 
-    // Restaurar mensaje limpio para el historial
     chats[chatId].mensajes[chats[chatId].mensajes.length - 1].content = message;
     chats[chatId].mensajes.push({ role: 'assistant', content: respuestaIA });
     guardarChats(chats);
